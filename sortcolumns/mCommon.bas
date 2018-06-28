@@ -23,7 +23,22 @@ End Sub
 
 
 Public Sub SysLog(ParamArray var() As Variant)
-    Debug.Print Now, UserName & "@" & ComputerName, AppName, Join(var, vbTab)
+    Dim text, line As String
+    text = Join(var, vbTab)
+    line = CStr(Now) & vbTab & UserName & "@" & ComputerName & vbTab & AppName & vbTab & text
+    Debug.Print line
+    
+    Dim LogPath As String
+    If AnyThing(AppName) Then
+        LogPath = GetSetting(AppName, "\", "LogPath", "")
+        If AnyThing(LogPath) Then
+            If Not mExport.DirExists(LogPath) Then
+                mExport.createNewDirectory LogPath
+            End If
+            LogPath = LogPath & "\" & Format(Now, "yyyy-mm-dd") & ".log"
+            write2file line, LogPath, True
+        End If
+    End If
 End Sub
 
 
@@ -102,3 +117,26 @@ Public Function ArrayLen(arr As Variant) As Integer
     ArrayLen = UBound(arr) - LBound(arr) + 1
 End Function
 
+
+Public Function BoolToStr(Value As Boolean) As String
+    BoolToStr = "nei"
+    If Value Then BoolToStr = "ja"
+End Function
+
+
+Sub write2file(text As String, ByVal filePath As String, Optional ByVal fileAppend As Boolean = False)
+' You can pass arguments to a procedure (function or sub) by reference or by value. By default, Excel VBA passes arguments by reference.
+' When passing arguments by reference we are referencing the original value.
+' When passing arguments by value we are passing a copy to the function. The original value is not changed.
+    Dim ff As Long
+
+    ff = FreeFile
+    If fileAppend Then
+        Open filePath For Append As #ff
+    Else
+        Open filePath For Output As #ff
+    End If
+    Print #ff, text
+    
+    Close #ff
+End Sub

@@ -1,10 +1,10 @@
 VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} ufSortColumns 
    Caption         =   "UserForm1"
-   ClientHeight    =   8508
+   ClientHeight    =   7548
    ClientLeft      =   108
    ClientTop       =   456
-   ClientWidth     =   11916
+   ClientWidth     =   9840
    OleObjectBlob   =   "ufSortColumns.frx":0000
    ShowModal       =   0   'False
 End
@@ -19,15 +19,112 @@ Option Explicit
 Private wbTarget As Workbook
 Private wsTarget As Worksheet
 Private HeaderRowNr As Integer
-
+Private ChangesDone As Boolean
 Dim cmdArray() As New cChkBoxPreset
+
+' All Controls with Tag As Integer where bit 1 is set will be shown if ShowBackEnd is True
+Private ShowBackEnd As Boolean
+Private cbPresetList_Input_Given As Boolean
+
+
+
+Private Sub btnClose_Click()
+    Unload Me
+End Sub
+
+
+Private Sub btnHideAllColumns_Click()
+    On Error GoTo ErrorHandler  ' in case the sheet is protected
+    wsTarget.UsedRange.EntireColumn.Hidden = True
+    
+    On Error GoTo -1
+    UpdateCheckBoxes
+    Exit Sub
+ErrorHandler:
+    SysLog "btnHideAllColumns_Click", "Error"
+End Sub
+
+
+Private Sub btnLoadPresets_Click()
+    LoadPresets
+End Sub
+
+
+Private Sub btnSaveAs_Click()
+    SysLog "btnSaveAs_Click()"
+    Dim Section As String
+    Section = wbTarget.Name & "\" & wsTarget.Name
+    
+    SaveSetting AppName, Section, "PresetCurrent", tbSaveAs.text
+    cbPresetList.AddItem tbSaveAs.text
+    Dim i As Integer, sPresetList As String
+    
+    sPresetList = ""
+    For i = 0 To cbPresetList.ListCount - 1
+        sPresetList = sPresetList & cbPresetList.List(i) & ";"
+    Next
+    If AnyThing(sPresetList) Then
+        sPresetList = Mid(sPresetList, 1, Len(sPresetList) - 1)
+        SaveSetting AppName, Section, "PresetList", sPresetList
+    Else
+        SysLog "btnSaveAs_Click()", "sPresetList Nothing", sPresetList
+    End If
+    If cbPresetList.ListCount - 1 > -1 Then
+        cbPresetList.ListIndex = cbPresetList.ListCount - 1
+    End If
+    SavePresets
+    
+    ChangesDone = False
+    laPreset.Caption = "Preset navn (har gjort endringer: " & BoolToStr(ChangesDone) & ")"
+End Sub
 
 
 Private Sub btnShowAllColumns_Click()
-    On Error Resume Next  ' in case the sheet is protected
-    wsTarget.Cells.EntireColumn.Hidden = False
+    On Error GoTo ErrorHandler  ' in case the sheet is protected
+    wsTarget.UsedRange.EntireColumn.Hidden = False
+    
+    On Error GoTo -1
+    UpdateCheckBoxes
+    Exit Sub
+ErrorHandler:
+    SysLog "btnHideAllColumns_Click", "Error"
 End Sub
 
+
+Private Sub btnUpdateCheckBoxes_Click()
+    UpdateCheckBoxes
+End Sub
+
+
+Public Sub UserForm_Change()
+    ChangesDone = True
+    laPreset.Caption = "Preset navn (har gjort endringer: " & BoolToStr(ChangesDone) & ")"
+End Sub
+
+
+Private Sub cbPresetList_Change()
+    
+    If cbPresetList_Input_Given Then
+        cbPresetList_Input_Given = False
+        SysLog "cbPresetList_Change()", "cbPresetList_Input_Given"
+        Dim Section, Key, Setting, HeaderName, order As String
+        Section = wbTarget.Name & "\" & wsTarget.Name
+        
+        Dim ScrollColumn As Integer
+        ScrollColumn = ActiveWindow.ScrollColumn
+        SaveSetting AppName, Section, "PresetCurrent", cbPresetList.Value
+        LoadPresets
+        If ActiveWindow.ActiveSheet.Name = wsTarget.Name Then ActiveWindow.ScrollColumn = ScrollColumn
+    End If
+End Sub
+
+Private Sub cbPresetList_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    cbPresetList_Input_Given = True
+End Sub
+
+Private Sub cbPresetList_MouseDown(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    cbPresetList_Input_Given = True
+End Sub
 
 Private Sub UserForm_Initialize()
     Project_Initialize
@@ -42,6 +139,18 @@ Private Sub UserForm_Initialize()
     Else
         SysLog "UserForm_Initialize()", "AppName Not Anything"
     End If
+    ChangesDone = False
+    cbPresetList_Input_Given = False
+    
+
+    Dim item As Control, i As Integer
+    ShowBackEnd = CBool(GetSetting(AppName, Me.Name, "ShowBackEnd", False))
+    For Each item In Controls
+        If IsNumeric(item.Tag) Then
+            i = CInt(item.Tag)
+            item.Visible = CBool(i And 1 And ShowBackEnd)
+        End If
+    Next
     
     If AnyThing(wsTarget) Then
         Me.Caption = wbTarget.Name & " - " & wsTarget.Name
@@ -59,6 +168,28 @@ End Sub
 
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If ChangesDone Then
+        Dim result As VbMsgBoxResult
+        result = MsgBox("Ønsker du å lagre endret preset?", vbYesNoCancel, "Lagre Preset?")
+        SysLog "UserForm_QueryClose()", "ChangesDone = " & CStr(ChangesDone), CInt(result)
+        Select Case result
+            Case vbOK      ' 1   OK
+            Case vbCancel  ' 2   Cancel
+                Cancel = True
+            Case vbAbort   ' 3   Abort
+            Case vbRetry   ' 4   Retry
+            Case vbIgnore  ' 5   Ignore
+            Case vbYes     ' 6   Yes
+                Dim Section As String
+                Section = wbTarget.Name & "\" & wsTarget.Name
+                SaveSetting AppName, Section, "PresetCurrent", cbPresetList.Value
+                SavePresets
+            Case vbNo      ' 7   No
+            Case Else
+                SysLog "UserForm_QueryClose()", "ChangesDone = " & CStr(ChangesDone), "Case Else"
+        End Select
+    End If
+
     If AnyThing(AppName) Then
             SaveSetting AppName, Me.Name, "Top", Me.Top
             SaveSetting AppName, Me.Name, "Left", Me.Left
@@ -110,6 +241,8 @@ Private Sub GenerateCheckBoxes()
         End If
     Next
     Set chkBox = Nothing
+    
+    LoadPresets
 End Sub
 
 
@@ -132,6 +265,7 @@ Public Sub ShowHideColumnByName(Value As Boolean, HeaderName As String)
         
                 If AnyThing(aCell) Then
                     aCell.EntireColumn.Hidden = Not Value
+                    ArrangeButtons
                 Else
                     SysLog "ShowHideColumnByName()", "aCell Not Anything"
                 End If
@@ -148,6 +282,7 @@ Public Sub ShowHideColumnByName(Value As Boolean, HeaderName As String)
     End If
 End Sub
 
+
 Public Sub UpdateCheckBoxes()
     If AnyThing(wsTarget) And AnyThing(HeaderRowNr) Then
         Dim MyRng, cell As Range
@@ -157,8 +292,10 @@ Public Sub UpdateCheckBoxes()
         For Each cell In MyRng.Cells
             Set chkBox = Nothing
             For Each item In Controls
-                If LCase(TypeName(item)) = "checkbox" And LCase(item.Caption) = LCase(cell.Value) Then
-                    Set chkBox = item
+                If LCase(TypeName(item)) = "checkbox" Then
+                    If LCase(item.Caption) = LCase(cell.Value) Then
+                        Set chkBox = item
+                    End If
                 End If
             Next item
             If AnyThing(chkBox) Then
@@ -186,9 +323,19 @@ Public Sub LoadPresets()
         Exit Sub
     End If
     
-    Settings = GetAllSettings(AppName, Section)
-    If AnyThing(Settings) Then
-        SysLog "LoadPresets()", "Settings is something", wbTarget.Name & "\" & wsTarget.Name
+    Dim sPresetCurrent, sPresetList As String
+    Dim aPresetList() As String
+    
+    sPresetCurrent = GetSetting(AppName, Section, "PresetCurrent", "")
+    cbPresetList.Value = sPresetCurrent
+    sPresetList = GetSetting(AppName, Section, "PresetList", "")
+    aPresetList = Split(sPresetList, ";")
+    cbPresetList.List = aPresetList
+    
+    
+    Settings = GetAllSettings(AppName, Section & "\" & sPresetCurrent)
+    If AnyThing(sPresetCurrent) And AnyThing(Settings) Then
+        SysLog "LoadPresets()", "Settings[" & LBound(Settings) & ":" & UBound(Settings) & "] found at " & Section & "\" & sPresetCurrent
         For i = LBound(Settings, 1) To UBound(Settings, 1)
             Key = Settings(i, 0)
             splt = InStr(1, Key, " ")
@@ -204,38 +351,66 @@ Public Sub LoadPresets()
             End If
         Next
         UpdateCheckBoxes
+    ElseIf Not AnyThing(sPresetCurrent) Then
+        SysLog "LoadPresets()", "sPresetCurrent Not Anything"
     Else
-        SysLog "LoadPreset()", "Section Not Anything"
+        SysLog "LoadPresets()", "Section Not Anything"
     End If
 End Sub
 
 Public Sub SavePresets()
     SysLog "SavePresets()"
-    Dim SkipPresetSave As Boolean
+    Dim Section As String, SkipPresetSave As Boolean
     
     Section = wbTarget.Name & "\" & wsTarget.Name
     SkipPresetSave = GetSetting(AppName, Section, "SkipPresetSave", False)
-    If SkipPresetLoad Then
+    If SkipPresetSave Then
         SysLog "SavePresets()", "SkipPresetSave = " & CStr(SkipPresetSave)
         Exit Sub
     End If
+    
+    If AnyThing(cbPresetList.Value) Then
+        Section = Section & "\" & cbPresetList.Value
+    
+        Dim MyRng, cell As Range
+        Set MyRng = wsTarget.rows(HeaderRowNr)
+        
+        Dim i, z As Integer
+        Dim Key, Setting As String
+        
+        i = 0
+        Dim chkBox As MSForms.CheckBox, Caption As String
+    '    Dim Row, Col As Integer
+        For Each cell In MyRng.Cells
+            If AnyThing(cell) And AnyThing(cell.Value) Then
+                Key = Format(i, "000") & " " & cell.Value
+                Setting = CStr(cell.EntireColumn.Hidden)
+                SaveSetting AppName, Section, Key, Setting
+                i = i + 1
+            End If
+        Next
+    Else
+        SysLog "SavePresets()", "cbPresetList.Value Nothing"
+    End If
+End Sub
 
-    Dim MyRng, cell As Range
-    Set MyRng = wsTarget.rows(HeaderRowNr)
-    
-    Dim i, z As Integer
-    Dim Section, Key, Setting As String
-    Section = wbTarget.Name & "\" & wsTarget.Name
-    
-    i = 0
-    Dim chkBox As MSForms.CheckBox, Caption As String
-    Dim Row, Col As Integer
-    For Each cell In MyRng.Cells
-        If AnyThing(cell) And AnyThing(cell.Value) Then
-            Key = Format(i, "000") & " " & cell.Value
-            Setting = CStr(cell.EntireColumn.Hidden)
-            SaveSetting AppName, Section, Key, Setting
-            i = i + 1
-        End If
-    Next
+
+Public Sub ArrangeButtons()
+    If AnyThing(wsTarget) Then
+        With wsTarget
+            Dim objX As Object, i, btnWid, btnWidSpc As Integer
+            i = 0
+            btnWid = 96
+            btnWidSpc = 12  ' Button Width Spaceing
+            
+            For Each objX In .OLEObjects
+                If TypeName(objX.Object) = "CommandButton" Then
+                    If objX.Visible Then
+                        objX.Left = btnWidSpc + i * (btnWid + btnWidSpc)
+                        i = i + 1
+                    End If
+                End If
+            Next
+        End With
+    End If
 End Sub

@@ -27,6 +27,7 @@ Private Sub CheckBoxEvents_Change()
     If Input_Given Then
         Input_Given = False
         ufSortColumns.ShowHideColumnByName CheckBoxEvents.Value, CheckBoxEvents.Caption
+        ufSortColumns.UserForm_Change
     End If
 End Sub
 

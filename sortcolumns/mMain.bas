@@ -11,11 +11,11 @@ Sub ufSortColumns_Show()
 End Sub
 
 
-Sub LoadPreset()
+Sub ufSortColumns_LoadPreset()
     ufSortColumns.LoadPresets
 End Sub
 
 
-Sub SavePreset()
+Sub ufSortColumns_SavePreset()
     ufSortColumns.SavePresets
 End Sub

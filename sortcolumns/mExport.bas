@@ -21,7 +21,7 @@ Private Sub Export()
     ' vbext_ct_Document         100     Document Module
     
     Folder = LCase(Mid(ThisWorkbook.Name, 1, Min(Array(InStrRev(ThisWorkbook.Name, "."), Len(ThisWorkbook.Name))) - 1))
-    Folder = ThisWorkbook.path & "\" & Folder & "\"
+    Folder = ThisWorkbook.Path & "\" & Folder & "\"
     createNewDirectory Folder
     Debug.Print Folder
     
@@ -31,14 +31,14 @@ Private Sub Export()
 End Sub
 
 
-Private Sub createNewDirectory(directoryName As String)
+Public Sub createNewDirectory(directoryName As String)
     If Not DirExists(directoryName) Then
         MkDir (directoryName)
     End If
 End Sub
 
 
-Function DirExists(DirName As String) As Boolean
+Public Function DirExists(DirName As String) As Boolean
     On Error GoTo ErrorHandler
     DirExists = GetAttr(DirName) And vbDirectory
 ErrorHandler:
