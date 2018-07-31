@@ -3,3 +3,6 @@
 *.frx
 
 */.idea/*
+
+Logs/*
+notes.txt

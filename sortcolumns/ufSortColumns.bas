@@ -98,7 +98,7 @@ End Sub
 
 Public Sub UserForm_Change()
     ChangesDone = True
-    laPreset.Caption = "Preset navn (har gjort endringer: " & BoolToStr(ChangesDone) & ")"
+'    laPreset.Caption = "Preset navn (har gjort endringer: " & BoolToStr(ChangesDone) & ")"
 End Sub
 
 
@@ -118,13 +118,21 @@ Private Sub cbPresetList_Change()
     End If
 End Sub
 
+
 Private Sub cbPresetList_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
     cbPresetList_Input_Given = True
 End Sub
 
+
 Private Sub cbPresetList_MouseDown(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
     cbPresetList_Input_Given = True
 End Sub
+
+
+Private Sub UserForm_Activate()
+    Me.Height = btnClose.Top + btnClose.Height + 8 + 28 ' 28 = UserForm Header Height
+End Sub
+
 
 Private Sub UserForm_Initialize()
     Project_Initialize
@@ -168,7 +176,56 @@ End Sub
 
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
-    If ChangesDone Then
+
+    Dim Section, sPresetCurrent, sPresetList, Key, order, HeaderName, Setting As String
+    Dim Settings As Variant, i, splt As Integer, Value As Boolean, aPresetList() As String
+    Dim cell, MyRng As Range, chkBox As MSForms.CheckBox, item As Control
+    On Error Resume Next
+    Set MyRng = wsTarget.UsedRange.rows(HeaderRowNr)
+    On Error GoTo -1
+    Dim AskForSave As Boolean
+    AskForSave = False
+    
+    Section = wbTarget.Name & "\" & wsTarget.Name
+    sPresetCurrent = GetSetting(AppName, Section, "PresetCurrent", "")
+    cbPresetList.Value = sPresetCurrent
+    sPresetList = GetSetting(AppName, Section, "PresetList", "")
+    aPresetList = Split(sPresetList, ";")
+    cbPresetList.List = aPresetList
+    
+    Settings = GetAllSettings(AppName, Section & "\" & sPresetCurrent)
+    If AnyThing(sPresetCurrent) And AnyThing(Settings) And AnyThing(MyRng) Then
+        SysLog "LoadPresets()", "Settings[" & LBound(Settings) & ":" & UBound(Settings) & "] found at " & Section & "\" & sPresetCurrent
+        For i = LBound(Settings, 1) To UBound(Settings, 1)
+            Key = Settings(i, 0)
+            splt = InStr(1, Key, " ")
+            order = Mid(Key, 1, splt)
+            HeaderName = Mid(Key, splt + 1)
+            Setting = Settings(i, 1)
+
+            If IsNumeric(order) And splt = 4 Then
+                Value = Not CBool(Setting)
+                For Each cell In MyRng.Cells
+                    Set chkBox = Nothing
+                    For Each item In Controls
+                        If LCase(TypeName(item)) = "checkbox" Then
+                            If LCase(item.Caption) = LCase(HeaderName) Then
+                                AskForSave = AskForSave Or (item.Value <> Value)
+                            End If
+                        End If
+                    Next item
+                Next cell
+            End If
+        Next
+    ElseIf Not AnyThing(sPresetCurrent) Then
+        SysLog "UserForm_QueryClose()", "sPresetCurrent Not Anything"
+    ElseIf Not AnyThing(MyRng) Then
+        SysLog "UserForm_QueryClose()", "MyRng Not Anything"
+    Else
+        SysLog "UserForm_QueryClose()", "Section Not Anything"
+    End If
+
+    If AskForSave Then
         Dim result As VbMsgBoxResult
         result = MsgBox("Ønsker du å lagre endret preset?", vbYesNoCancel, "Lagre Preset?")
         SysLog "UserForm_QueryClose()", "ChangesDone = " & CStr(ChangesDone), CInt(result)
@@ -180,7 +237,6 @@ Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
             Case vbRetry   ' 4   Retry
             Case vbIgnore  ' 5   Ignore
             Case vbYes     ' 6   Yes
-                Dim Section As String
                 Section = wbTarget.Name & "\" & wsTarget.Name
                 SaveSetting AppName, Section, "PresetCurrent", cbPresetList.Value
                 SavePresets

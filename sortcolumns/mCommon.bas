@@ -32,11 +32,10 @@ Public Sub SysLog(ParamArray var() As Variant)
     If AnyThing(AppName) Then
         LogPath = GetSetting(AppName, "\", "LogPath", "")
         If AnyThing(LogPath) Then
-            If Not mExport.DirExists(LogPath) Then
-                mExport.createNewDirectory LogPath
+            If mExport.DirExists(LogPath) Then
+                LogPath = LogPath & "\" & Format(Now, "yyyy-mm-dd") & ".log"
+                write2file line, LogPath, True
             End If
-            LogPath = LogPath & "\" & Format(Now, "yyyy-mm-dd") & ".log"
-            write2file line, LogPath, True
         End If
     End If
 End Sub
@@ -77,15 +76,15 @@ End Function
 
 Public Function onlyDigits(s As String) As String
     ' https://stackoverflow.com/questions/7239328/how-to-find-numbers-from-a-string
-    Dim retval As String, i As Integer
-    retval = ""
+    Dim RetVal As String, i As Integer
+    RetVal = ""
     
     For i = 1 To Len(s)
         If Mid(s, i, 1) >= "0" And Mid(s, i, 1) <= "9" Then
-            retval = retval + Mid(s, i, 1)
+            RetVal = RetVal + Mid(s, i, 1)
         End If
     Next
-    onlyDigits = retval
+    onlyDigits = RetVal
 End Function
 
 
